@@ -1,7 +1,9 @@
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Command } from "commander";
+import ora from "ora";
 import { loadConfig } from "./config.js";
-import { formatJson, formatQuiet, formatTerminal } from "./report.js";
+import { formatHtml, formatJson, formatQuiet, formatTerminal } from "./report.js";
 import { scan } from "./scanner.js";
 import type { Severity } from "./types.js";
 
@@ -44,14 +46,19 @@ program
 		}
 
 		const config = configResult.value;
+
+		// Show spinner unless quiet mode
+		const spinner = config.quiet ? null : ora("Scanning skill for security issues...").start();
+
 		const result = await scan(resolvedPath, config);
 
 		if (!result.ok) {
-			console.error(`Scan failed: ${result.error.message}`);
+			spinner?.fail(`Scan failed: ${result.error.message}`);
 			process.exit(1);
 		}
 
 		const scanResult = result.value;
+		spinner?.stop();
 
 		// Format output
 		let output: string;
@@ -59,13 +66,24 @@ program
 			output = formatQuiet(scanResult);
 		} else if (config.format === "json") {
 			output = formatJson(scanResult);
+		} else if (config.format === "html") {
+			output = formatHtml(scanResult);
 		} else {
-			output = formatTerminal(scanResult);
+			output = formatTerminal(scanResult, config.verbose);
 		}
 
-		console.log(output);
+		// Write to file or stdout
+		if (config.output) {
+			const outputPath = path.resolve(config.output);
+			await writeFile(outputPath, output, "utf-8");
+			if (!config.quiet) {
+				console.log(`Report written to ${outputPath}`);
+			}
+		} else {
+			console.log(output);
+		}
 
-		// Exit codes: 0 = safe, 1 = warnings, 2 = danger
+		// Exit codes: 0 = safe (score < 4), 1 = warnings (4-7), 2 = danger (> 7)
 		if (scanResult.riskScore > 7) {
 			process.exit(2);
 		} else if (scanResult.riskScore > 4) {

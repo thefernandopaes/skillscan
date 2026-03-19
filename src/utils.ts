@@ -18,8 +18,10 @@ export function err<E>(error: E): Result<never, E> {
  * Convert a relative file path to a display-friendly format
  */
 export function toRelativePath(filePath: string, basePath: string): string {
-	if (filePath.startsWith(basePath)) {
-		return filePath.slice(basePath.length + 1).replace(/\\/g, "/");
+	const normalizedFile = filePath.replace(/\\/g, "/");
+	const normalizedBase = basePath.replace(/\\/g, "/");
+	if (normalizedFile.startsWith(normalizedBase)) {
+		return normalizedFile.slice(normalizedBase.length + 1);
 	}
-	return filePath.replace(/\\/g, "/");
+	return normalizedFile;
 }
