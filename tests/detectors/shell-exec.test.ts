@@ -51,4 +51,36 @@ describe("shell-exec detector", () => {
 		const findings = await shellExecDetector.run(ctx);
 		expect(findings).toHaveLength(0);
 	});
+
+	it("does not flag regex.exec() without child_process import", async () => {
+		const ctx = makeCtx('const regex = /foo/;\nconst result = regex.exec("foobar");');
+		const findings = await shellExecDetector.run(ctx);
+		expect(findings).toHaveLength(0);
+	});
+
+	it("does not flag db.cursor.exec() without child_process import", async () => {
+		const ctx = makeCtx(
+			'const db = { cursor: { exec: (q: string) => q } };\ndb.cursor.exec("SELECT 1");',
+		);
+		const findings = await shellExecDetector.run(ctx);
+		expect(findings).toHaveLength(0);
+	});
+
+	it("flags exec with child_process import", async () => {
+		const ctx = makeCtx('import { exec } from "child_process";\nexec("ls");');
+		const findings = await shellExecDetector.run(ctx);
+		expect(findings.length).toBeGreaterThan(0);
+	});
+
+	it("flags exec with node:child_process import", async () => {
+		const ctx = makeCtx('import { exec } from "node:child_process";\nexec("ls");');
+		const findings = await shellExecDetector.run(ctx);
+		expect(findings.length).toBeGreaterThan(0);
+	});
+
+	it("flags execSync without child_process import (unambiguous)", async () => {
+		const ctx = makeCtx('execSync("ls -la");');
+		const findings = await shellExecDetector.run(ctx);
+		expect(findings.length).toBeGreaterThan(0);
+	});
 });

@@ -26,6 +26,7 @@ program
 	.option("--no-color", "Disable colored output")
 	.option("--config <path>", "Path to config file")
 	.option("--ignore <detectors>", "Comma-separated detector IDs to skip")
+	.option("--exclude <dirs>", "Comma-separated directories to exclude (merged with defaults)")
 	.option("-q, --quiet", "Only output risk score (for CI/CD)")
 	.option("-v, --verbose", "Show detailed analysis for each finding")
 	.action(async (skillPath: string, options: Record<string, unknown>) => {
@@ -36,6 +37,9 @@ program
 			output: (options.output as string) ?? null,
 			severity: options.severity as Severity,
 			ignore: options.ignore ? (options.ignore as string).split(",").map((s) => s.trim()) : [],
+			excludeDirs: options.exclude
+				? (options.exclude as string).split(",").map((s) => s.trim())
+				: [],
 			quiet: Boolean(options.quiet),
 			verbose: Boolean(options.verbose),
 		});

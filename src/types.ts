@@ -83,6 +83,7 @@ export interface Detector {
 export interface ScanConfig {
 	severity: Severity;
 	ignore: string[];
+	excludeDirs: string[];
 	allowlistedDomains: string[];
 	format: "terminal" | "json" | "html";
 	output: string | null;

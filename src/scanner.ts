@@ -51,16 +51,29 @@ export function getRiskLevel(score: number): RiskLevel {
 	return "danger";
 }
 
-/** Recursively collect source file paths from a directory */
-async function collectSourceFiles(dirPath: string): Promise<string[]> {
+/**
+ * Check if a directory name matches any exclusion pattern.
+ * Supports prefix-dash matching: "dist" matches "dist", "dist-bff", "dist-server", but NOT "distribution".
+ */
+function isDirExcluded(dirName: string, excludeDirs: string[]): boolean {
+	return excludeDirs.some((pattern) => dirName === pattern || dirName.startsWith(`${pattern}-`));
+}
+
+/** Recursively collect source file paths from a directory, skipping excluded directories */
+async function collectSourceFiles(dirPath: string, excludeDirs: string[]): Promise<string[]> {
 	const files: string[] = [];
 	const entries = await readdir(dirPath, { withFileTypes: true });
 
 	for (const entry of entries) {
 		const fullPath = path.join(dirPath, entry.name);
 		if (entry.isDirectory()) {
-			if (entry.name === "node_modules" || entry.name === ".git") continue;
-			files.push(...(await collectSourceFiles(fullPath)));
+			if (
+				entry.name === "node_modules" ||
+				entry.name === ".git" ||
+				isDirExcluded(entry.name, excludeDirs)
+			)
+				continue;
+			files.push(...(await collectSourceFiles(fullPath, excludeDirs)));
 		} else if (SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
 			files.push(fullPath);
 		}
@@ -111,7 +124,7 @@ export async function scan(skillPath: string, config: ScanConfig): Promise<Resul
 		}
 
 		// Load files
-		const filePaths = await collectSourceFiles(skillPath);
+		const filePaths = await collectSourceFiles(skillPath, config.excludeDirs);
 		const project = new Project({ skipAddingFilesFromTsConfig: true });
 		for (const filePath of filePaths) {
 			project.addSourceFileAtPath(filePath);

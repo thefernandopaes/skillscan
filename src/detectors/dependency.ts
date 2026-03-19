@@ -82,7 +82,8 @@ function findTyposquatCandidates(packageName: string): string[] {
 	return POPULAR_PACKAGES.filter((popular) => {
 		if (packageName === popular) return false;
 		const distance = levenshtein(packageName, popular);
-		return distance > 0 && distance <= 2;
+		const maxDistance = Math.min(packageName.length, popular.length) <= 4 ? 1 : 2;
+		return distance > 0 && distance <= maxDistance;
 	});
 }
 

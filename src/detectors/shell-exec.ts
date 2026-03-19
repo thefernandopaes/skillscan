@@ -1,16 +1,12 @@
-import { findCallExpressionsMatching } from "../parsers/source-code.js";
+import { findCallExpressionsMatching, findImports } from "../parsers/source-code.js";
 import type { Detector, Finding, ScanContext } from "../types.js";
 import { toRelativePath } from "../utils.js";
 
-const SHELL_FUNCTIONS = [
-	"exec",
-	"execSync",
-	"spawn",
-	"spawnSync",
-	"fork",
-	"execFile",
-	"execFileSync",
-];
+/** Always flag these — no standard API shares these names */
+const UNAMBIGUOUS_SHELL_FUNCTIONS = ["execSync", "spawnSync", "execFile", "execFileSync"];
+
+/** Only flag these if the file imports child_process */
+const AMBIGUOUS_SHELL_FUNCTIONS = ["exec", "spawn", "fork"];
 
 const DANGEROUS_COMMAND_STRINGS = [
 	"rm -rf",
@@ -34,7 +30,24 @@ export const shellExecDetector: Detector = {
 
 	async run(ctx: ScanContext): Promise<Finding[]> {
 		const findings: Finding[] = [];
-		const calls = findCallExpressionsMatching(ctx.files, SHELL_FUNCTIONS);
+
+		// Build set of file paths that import child_process
+		const childProcessImports = findImports(ctx.files);
+		const filesWithChildProcess = new Set(
+			childProcessImports
+				.filter(
+					(imp) =>
+						imp.moduleSpecifier === "child_process" || imp.moduleSpecifier === "node:child_process",
+				)
+				.map((imp) => imp.sourceFile.getFilePath()),
+		);
+
+		// Find unambiguous calls (always flagged) + ambiguous calls (only if file imports child_process)
+		const unambiguousCalls = findCallExpressionsMatching(ctx.files, UNAMBIGUOUS_SHELL_FUNCTIONS);
+		const ambiguousCalls = findCallExpressionsMatching(ctx.files, AMBIGUOUS_SHELL_FUNCTIONS).filter(
+			(call) => filesWithChildProcess.has(call.sourceFile.getFilePath()),
+		);
+		const calls = [...unambiguousCalls, ...ambiguousCalls];
 
 		for (const call of calls) {
 			const filePath = toRelativePath(call.sourceFile.getFilePath(), ctx.skillPath);

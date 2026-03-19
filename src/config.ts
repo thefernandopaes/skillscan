@@ -1,10 +1,29 @@
 import { cosmiconfig } from "cosmiconfig";
 import type { Result, ScanConfig } from "./types.js";
 
+/** Default directories to exclude from scanning (build artifacts, framework output, caches) */
+export const DEFAULT_EXCLUDE_DIRS = [
+	"dist",
+	".sst",
+	".next",
+	".nuxt",
+	"build",
+	".output",
+	".vercel",
+	".serverless",
+	".amplify",
+	".terraform",
+	"coverage",
+	".cache",
+	"__pycache__",
+	".turbo",
+];
+
 /** Default scan configuration */
 export const DEFAULT_CONFIG: ScanConfig = {
 	severity: "low",
 	ignore: [],
+	excludeDirs: [...DEFAULT_EXCLUDE_DIRS],
 	allowlistedDomains: [
 		"api.openai.com",
 		"api.anthropic.com",
@@ -28,12 +47,20 @@ export async function loadConfig(overrides: Partial<ScanConfig> = {}): Promise<R
 
 		const fileConfig = (result?.config as Partial<ScanConfig>) ?? {};
 
+		// Merge excludeDirs additively: user config extends defaults, not replaces
+		const mergedExcludeDirs = [
+			...DEFAULT_EXCLUDE_DIRS,
+			...(fileConfig.excludeDirs ?? []),
+			...(overrides.excludeDirs ?? []),
+		];
+
 		return {
 			ok: true,
 			value: {
 				...DEFAULT_CONFIG,
 				...fileConfig,
 				...overrides,
+				excludeDirs: [...new Set(mergedExcludeDirs)],
 			},
 		};
 	} catch (error) {

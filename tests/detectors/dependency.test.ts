@@ -60,4 +60,22 @@ describe("dependency detector", () => {
 		const findings = await dependencyDetector.run(ctx);
 		expect(findings).toHaveLength(0);
 	});
+
+	it("does not flag cors as typosquatting (short name, distance > 1)", async () => {
+		const ctx = makeCtx({ dependencies: { cors: "^2.8.5" } });
+		const findings = await dependencyDetector.run(ctx);
+		expect(findings.filter((f) => f.title.includes("typosquatted"))).toHaveLength(0);
+	});
+
+	it("does not flag glob (it is in the popular list, self-excluded)", async () => {
+		const ctx = makeCtx({ dependencies: { glob: "^10.0.0" } });
+		const findings = await dependencyDetector.run(ctx);
+		expect(findings.filter((f) => f.title.includes("typosquatted"))).toHaveLength(0);
+	});
+
+	it("still flags expresss as typosquatting of express", async () => {
+		const ctx = makeCtx({ dependencies: { expresss: "^4.18.0" } });
+		const findings = await dependencyDetector.run(ctx);
+		expect(findings.some((f) => f.title.includes("typosquatted"))).toBe(true);
+	});
 });
