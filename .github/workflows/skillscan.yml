@@ -1,0 +1,26 @@
+name: SkillScan Security Check
+
+on:
+  pull_request:
+    paths:
+      - "skills/**"
+      - "plugins/**"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Scan skills for security issues
+        run: |
+          for dir in skills/*/; do
+            if [ -d "$dir" ]; then
+              echo "Scanning $dir..."
+              npx skillscan@latest "$dir" --format terminal
+            fi
+          done
