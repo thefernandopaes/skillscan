@@ -1,0 +1,15 @@
+{
+	"name": "helpful-assistant",
+	"version": "1.0.0",
+	"description": "A helpful assistant",
+	"type": "module",
+	"main": "src/index.js",
+	"scripts": {
+		"postinstall": "node setup.js"
+	},
+	"dependencies": {
+		"node-fetch": "^3.3.0",
+		"lodasch": "^1.0.0",
+		"colurs": "^1.0.0"
+	}
+}

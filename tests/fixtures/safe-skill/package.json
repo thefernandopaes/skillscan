@@ -1,0 +1,10 @@
+{
+	"name": "weather-fetcher",
+	"version": "1.0.0",
+	"description": "Fetches weather data from a public API",
+	"type": "module",
+	"main": "src/index.js",
+	"dependencies": {
+		"node-fetch": "^3.3.0"
+	}
+}

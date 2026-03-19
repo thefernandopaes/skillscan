@@ -2,6 +2,8 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { Project } from "ts-morph";
 import { detectors } from "./detectors/index.js";
+import { parsePackageJson } from "./parsers/package-json.js";
+import { parseSkillMd } from "./parsers/skill-md.js";
 import type {
 	DetectorResult,
 	Finding,
@@ -72,16 +74,8 @@ async function loadSkillMd(skillPath: string): Promise<SkillMdData | null> {
 	const skillMdPath = path.join(skillPath, "SKILL.md");
 	try {
 		const content = await readFile(skillMdPath, "utf-8");
-		// Full parsing will be in src/parsers/skill-md.ts
-		return {
-			name: "",
-			description: "",
-			permissions: [],
-			triggers: [],
-			dependencies: [],
-			instructions: content,
-			raw: content,
-		};
+		const result = parseSkillMd(content);
+		return result.ok ? result.value : null;
 	} catch {
 		return null;
 	}
@@ -92,15 +86,8 @@ async function loadPackageJson(skillPath: string): Promise<PackageJsonData | nul
 	const pkgPath = path.join(skillPath, "package.json");
 	try {
 		const content = await readFile(pkgPath, "utf-8");
-		const raw = JSON.parse(content) as Record<string, unknown>;
-		return {
-			name: (raw.name as string) ?? "",
-			version: (raw.version as string) ?? "",
-			dependencies: (raw.dependencies as Record<string, string>) ?? {},
-			devDependencies: (raw.devDependencies as Record<string, string>) ?? {},
-			scripts: (raw.scripts as Record<string, string>) ?? {},
-			raw,
-		};
+		const result = parsePackageJson(content);
+		return result.ok ? result.value : null;
 	} catch {
 		return null;
 	}
