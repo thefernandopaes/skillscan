@@ -5,39 +5,85 @@ import { DEFAULT_CONFIG } from "../src/config.js";
 import { calculateRiskScore, getRiskLevel, scan } from "../src/scanner.js";
 import type { Finding } from "../src/types.js";
 
+function makeFinding(severity: Finding["severity"]): Finding {
+	return {
+		detectorId: "test",
+		severity,
+		title: "Test",
+		description: "Test finding",
+		file: "test.ts",
+		line: 1,
+		code: "test()",
+		fix: "Fix it",
+	};
+}
+
+function makeFindings(...severities: Finding["severity"][]): Finding[] {
+	return severities.map(makeFinding);
+}
+
 describe("calculateRiskScore", () => {
 	it("returns 0 for no findings", () => {
 		expect(calculateRiskScore([])).toBe(0);
 	});
 
-	it("calculates score from severity weights", () => {
-		const findings: Finding[] = [
-			{
-				detectorId: "test",
-				severity: "critical",
-				title: "Test",
-				description: "Test finding",
-				file: "test.ts",
-				line: 1,
-				code: "test()",
-				fix: "Fix it",
-			},
-		];
-		expect(calculateRiskScore(findings)).toBe(10);
+	it("2 MEDIUM → ~2.6 (CAUTION)", () => {
+		const score = calculateRiskScore(makeFindings("medium", "medium"));
+		expect(score).toBeGreaterThanOrEqual(2.1);
+		expect(score).toBeLessThanOrEqual(3.5);
+		expect(getRiskLevel(score)).toBe("caution");
+	});
+
+	it("1 HIGH → ~2.7 (CAUTION)", () => {
+		const score = calculateRiskScore(makeFindings("high"));
+		expect(score).toBeGreaterThanOrEqual(2.1);
+		expect(score).toBeLessThanOrEqual(4.0);
+		expect(getRiskLevel(score)).toBe("caution");
+	});
+
+	it("1 CRITICAL → ~5.0 (WARNING)", () => {
+		const score = calculateRiskScore(makeFindings("critical"));
+		expect(score).toBeGreaterThanOrEqual(4.1);
+		expect(score).toBeLessThanOrEqual(6.0);
+		expect(getRiskLevel(score)).toBe("warning");
+	});
+
+	it("1 CRITICAL + 1 HIGH → ~6.3 (WARNING)", () => {
+		const score = calculateRiskScore(makeFindings("critical", "high"));
+		expect(score).toBeGreaterThanOrEqual(5.5);
+		expect(score).toBeLessThanOrEqual(7.0);
+		expect(getRiskLevel(score)).toBe("warning");
+	});
+
+	it("2 CRITICAL + 2 HIGH → ~8.6 (DANGER)", () => {
+		const score = calculateRiskScore(makeFindings("critical", "critical", "high", "high"));
+		expect(score).toBeGreaterThanOrEqual(7.5);
+		expect(score).toBeLessThanOrEqual(9.5);
+		expect(getRiskLevel(score)).toBe("danger");
+	});
+
+	it("3 CRITICAL + 3 HIGH + 2 MEDIUM → ~9.6 (DANGER)", () => {
+		const score = calculateRiskScore(
+			makeFindings("critical", "critical", "critical", "high", "high", "high", "medium", "medium"),
+		);
+		expect(score).toBeGreaterThanOrEqual(9.0);
+		expect(score).toBeLessThanOrEqual(10);
+		expect(getRiskLevel(score)).toBe("danger");
 	});
 
 	it("caps score at 10", () => {
-		const findings: Finding[] = Array.from({ length: 5 }, () => ({
-			detectorId: "test",
-			severity: "critical" as const,
-			title: "Test",
-			description: "Test finding",
-			file: "test.ts",
-			line: 1,
-			code: "test()",
-			fix: "Fix it",
-		}));
-		expect(calculateRiskScore(findings)).toBe(10);
+		const findings = makeFindings(
+			"critical",
+			"critical",
+			"critical",
+			"critical",
+			"critical",
+			"high",
+			"high",
+			"high",
+			"high",
+		);
+		expect(calculateRiskScore(findings)).toBeLessThanOrEqual(10);
 	});
 });
 

@@ -1,5 +1,5 @@
 {
-	"name": "skillscan",
+	"name": "skillscan-cli",
 	"version": "0.1.0",
 	"description": "Security scanner for AI agent skills/plugins. Detects prompt injection, data exfiltration, excessive permissions, and supply chain attacks.",
 	"type": "module",

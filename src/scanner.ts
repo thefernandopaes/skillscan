@@ -18,10 +18,10 @@ import type {
 } from "./types.js";
 
 const SEVERITY_WEIGHTS: Record<Severity, number> = {
-	critical: 10,
-	high: 6,
-	medium: 3,
-	low: 1,
+	critical: 5.5,
+	high: 2.5,
+	medium: 1.2,
+	low: 0.4,
 	info: 0,
 };
 
@@ -29,6 +29,8 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".js", ".mjs", ".cjs"]);
 
 /**
  * Calculate risk score from findings.
+ * Uses logarithmic scaling so scores grow quickly with the first few findings
+ * but converge toward 10 as more are added.
  * Returns a value between 0.0 and 10.0.
  */
 export function calculateRiskScore(findings: Finding[]): number {
@@ -39,8 +41,11 @@ export function calculateRiskScore(findings: Finding[]): number {
 		0,
 	);
 
-	// Cap at 10, scale logarithmically to avoid one finding = max score
-	return Math.min(10, Math.round(totalWeight * 10) / 10);
+	// Logarithmic scaling: 10 * (1 - e^(-totalWeight / k))
+	// k controls how fast the curve approaches 10
+	const k = 8;
+	const raw = 10 * (1 - Math.exp(-totalWeight / k));
+	return Math.min(10, Math.round(raw * 10) / 10);
 }
 
 /** Derive risk level from a numeric risk score */

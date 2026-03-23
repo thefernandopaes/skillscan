@@ -1,5 +1,6 @@
-import { findStringLiterals } from "../parsers/source-code.js";
-import type { Detector, Finding, ScanContext } from "../types.js";
+import type { SourceFile } from "ts-morph";
+import { findCallExpressionsMatching, findStringLiterals } from "../parsers/source-code.js";
+import type { Detector, Finding, ScanContext, Severity } from "../types.js";
 import { toRelativePath } from "../utils.js";
 
 const CREDENTIAL_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
@@ -31,6 +32,32 @@ const CREDENTIAL_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
 	{ name: "Generic Secret", pattern: /(?:secret|password|passwd|pwd)\s*[:=]\s*["'][^"']{8,}["']/i },
 ];
 
+/** Env var names that are common/expected in any project — INFO unless transmitted externally */
+const COMMON_ENV_NAMES = new Set([
+	"DATABASE_URL",
+	"NODE_ENV",
+	"PORT",
+	"HOST",
+	"LOG_LEVEL",
+	"TZ",
+	"HOME",
+	"PATH",
+]);
+
+/** Patterns in env var names that indicate truly sensitive credentials — always MEDIUM+ */
+const SENSITIVE_NAME_PATTERNS = [
+	"SECRET",
+	"TOKEN",
+	"API_KEY",
+	"APIKEY",
+	"PASSWORD",
+	"PASSWD",
+	"PRIVATE_KEY",
+	"AUTH",
+	"CREDENTIALS",
+];
+
+/** All env var names we scan for (common + sensitive patterns from the original list) */
 const SENSITIVE_ENV_NAMES = [
 	"API_KEY",
 	"SECRET_KEY",
@@ -48,6 +75,33 @@ const SENSITIVE_ENV_NAMES = [
 	"PASSWORD",
 	"CREDENTIALS",
 ];
+
+/** HTTP client function names used for external transmission detection */
+const HTTP_CALL_NAMES = ["fetch", "get", "post", "put", "patch", "delete", "request", "axios"];
+
+/**
+ * Check if an env var name matches sensitive credential patterns.
+ * Returns true for names containing SECRET, TOKEN, API_KEY, PASSWORD, etc.
+ */
+function isSensitiveEnvName(envName: string): boolean {
+	const upper = envName.toUpperCase();
+	return SENSITIVE_NAME_PATTERNS.some((pattern) => upper.includes(pattern));
+}
+
+/**
+ * Check if an env var is transmitted externally in the same file.
+ * Looks for the variable being referenced in HTTP call arguments.
+ */
+function isTransmittedExternally(envName: string, file: SourceFile): boolean {
+	const calls = findCallExpressionsMatching([file], HTTP_CALL_NAMES);
+	for (const call of calls) {
+		const argsText = call.arguments.join(", ");
+		if (argsText.includes(envName)) {
+			return true;
+		}
+	}
+	return false;
+}
 
 /** Detect hardcoded credentials and sensitive environment variable access */
 export const credentialLeakDetector: Detector = {
@@ -93,15 +147,37 @@ export const credentialLeakDetector: Detector = {
 				const matches = text.matchAll(envPattern);
 				for (const match of matches) {
 					const lineNum = text.slice(0, match.index).split("\n").length;
+					const transmitted = isTransmittedExternally(envName, file);
+
+					let severity: Severity;
+					let description: string;
+
+					if (transmitted) {
+						// Env var is sent over HTTP — always high regardless of name
+						severity = "high";
+						description = `Transmits environment variable ${envName} to an external endpoint`;
+					} else if (COMMON_ENV_NAMES.has(envName) && !isSensitiveEnvName(envName)) {
+						// Common env var used locally — informational only
+						severity = "info";
+						description = `Accesses common environment variable ${envName}`;
+					} else {
+						// Sensitive env var used locally — worth flagging but not critical
+						severity = "medium";
+						description = `Accesses sensitive environment variable ${envName}`;
+					}
+
 					findings.push({
 						detectorId: "credential-leak",
-						severity: "medium",
+						severity,
 						title: "Sensitive environment variable access",
-						description: `Accesses sensitive environment variable ${envName}`,
+						description,
 						file: filePath,
 						line: lineNum,
 						code: match[0],
-						fix: "Ensure this environment variable is not logged or transmitted to external services",
+						fix:
+							severity === "high"
+								? "Do not transmit credentials to external services. Remove the outbound request or use a vault"
+								: "Ensure this environment variable is not logged or transmitted to external services",
 					});
 				}
 			}
